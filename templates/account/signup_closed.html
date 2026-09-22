@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% load static i18n account %}
+
+{% block title %}Registration Closed · BrightBean Studio{% endblock %}
+
+{% block auth_content %}
+<style>
+  .auth-card .btn-brand {
+    background-color: #93a240;
+    box-shadow: 0 4px 14px rgba(147, 162, 64, 0.28);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 0.625rem 1rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    border-radius: 0.5rem;
+    color: #ffffff;
+    transition: all 0.2s ease-in-out;
+  }
+  .auth-card .btn-brand:hover {
+    background-color: #849139;
+    box-shadow: 0 6px 20px rgba(147, 162, 64, 0.35);
+  }
+  .auth-card .btn-brand:focus {
+    box-shadow: 0 0 0 3px rgba(147, 162, 64, 0.35);
+  }
+</style>
+<div class="w-full max-w-md px-4">
+    <!-- Logo & Header -->
+    <div class="text-center mb-8">
+        <div class="inline-flex items-center justify-center w-12 h-12 mb-4">
+            <img src="{% static 'img/brightbean-studio-logo.webp' %}" alt="BrightBean Studio logo" class="w-12 h-12 object-contain">
+        </div>
+        <span class="block text-[11px] font-semibold uppercase tracking-widest mb-2" style="color: #93a240;">BrightBean · Studio</span>
+        <h1 class="text-2xl font-bold tracking-tight" style="color: var(--text-primary);">
+            Registration Closed
+        </h1>
+        <p class="text-sm mt-1" style="color: var(--text-secondary);">
+            New user registration is currently disabled.
+        </p>
+    </div>
+
+    <!-- Card -->
+    <div class="auth-card text-center py-6">
+        <div class="mx-auto w-12 h-12 mb-4 rounded-full flex items-center justify-center" style="background-color: rgba(239, 68, 68, 0.1); color: #ef4444;">
+            <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
+            </svg>
+        </div>
+
+        <h2 class="text-base font-semibold mb-2" style="color: var(--text-primary);">
+            Public signups are not available
+        </h2>
+
+        <p class="text-sm mb-6 px-2" style="color: var(--text-secondary); line-height: 1.5;">
+            Public account creation is turned off for this instance. If you were invited by an organization administrator, please follow the link in your invitation email to set up your account.
+        </p>
+
+        <a href="{% url 'account_login' %}" class="btn-brand">
+            Return to Sign In
+        </a>
+    </div>
+
+    <!-- Footer link -->
+    <p class="text-center text-sm mt-6" style="color: var(--text-secondary);">
+        Already have an account?
+        <a href="{% url 'account_login' %}" class="font-semibold hover:underline" style="color: var(--primary);">Sign in</a>
+    </p>
+</div>
+{% endblock %}

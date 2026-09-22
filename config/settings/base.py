@@ -115,6 +115,7 @@ TEMPLATES = [
                 "apps.common.context_processors.sidebar_context",
                 "apps.onboarding.context_processors.onboarding_checklist",
                 "apps.intelligence.context_processors.intelligence_flag",
+                "apps.accounts.context_processors.registration_status",
             ],
         },
     },
@@ -291,6 +292,10 @@ SOCIALACCOUNT_AUTO_SIGNUP = True
 SOCIALACCOUNT_LOGIN_ON_GET = False
 ACCOUNT_ADAPTER = "apps.accounts.adapters.AccountAdapter"
 SOCIALACCOUNT_ADAPTER = "apps.accounts.adapters.SocialAccountAdapter"
+REGISTRATION_ENABLED = env.bool(
+    "REGISTRATION_ENABLED",
+    default=env.bool("ENABLE_REGISTRATION", default=True),
+)
 
 # Sessions
 SESSION_ENGINE = "django.contrib.sessions.backends.db"

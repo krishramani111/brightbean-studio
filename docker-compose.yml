@@ -1,33 +1,39 @@
 services:
   migrate:
+    image: ${BRIGHTBEAN_IMAGE:-ghcr.io/krishramani111/brightbean-studio:latest}
     build: .
     command: python manage.py migrate --noinput
     env_file:
-      - .env
+      - path: .env
+        required: false
     depends_on:
       postgres:
         condition: service_healthy
 
   app:
+    image: ${BRIGHTBEAN_IMAGE:-ghcr.io/krishramani111/brightbean-studio:latest}
     build: .
     volumes:
       - media_data:/app/media
     ports:
       - "8000:8000"
     env_file:
-      - .env
+      - path: .env
+        required: false
     depends_on:
       migrate:
         condition: service_completed_successfully
     restart: unless-stopped
 
   worker:
+    image: ${BRIGHTBEAN_IMAGE:-ghcr.io/krishramani111/brightbean-studio:latest}
     build: .
     command: python manage.py process_tasks
     volumes:
       - media_data:/app/media
     env_file:
-      - .env
+      - path: .env
+        required: false
     depends_on:
       migrate:
         condition: service_completed_successfully

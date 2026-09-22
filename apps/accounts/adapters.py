@@ -1,8 +1,29 @@
 from allauth.account.adapter import DefaultAccountAdapter
 from allauth.socialaccount.adapter import DefaultSocialAccountAdapter
+from django.conf import settings
 
 from apps.accounts.models import OAuthConnection
 from apps.common.mail import transactional
+
+
+def _has_valid_invitation(request) -> bool:
+    """Check if request carries a valid, unexpired team invitation."""
+    if not request:
+        return False
+    token = None
+    if hasattr(request, "session"):
+        token = request.session.get("pending_invite_token")
+    if not token and hasattr(request, "GET"):
+        token = request.GET.get("invite")
+    if not token:
+        return False
+    try:
+        from apps.members.models import Invitation
+
+        invitation = Invitation.objects.filter(token=token, accepted_at__isnull=True).first()
+        return bool(invitation and not invitation.is_expired)
+    except Exception:
+        return False
 
 
 class AccountAdapter(DefaultAccountAdapter):
@@ -19,6 +40,11 @@ class AccountAdapter(DefaultAccountAdapter):
     overriding it here covers all of them without touching a template.
     """
 
+    def is_open_for_signup(self, request):
+        if not getattr(settings, "REGISTRATION_ENABLED", True):
+            return bool(_has_valid_invitation(request))
+        return super().is_open_for_signup(request)
+
     def render_mail(self, template_prefix, email, context, headers=None):
         return super().render_mail(
             template_prefix,
@@ -30,6 +56,11 @@ class AccountAdapter(DefaultAccountAdapter):
 
 class SocialAccountAdapter(DefaultSocialAccountAdapter):
     """Custom adapter that syncs Google social logins to OAuthConnection."""
+
+    def is_open_for_signup(self, request, sociallogin):
+        if not getattr(settings, "REGISTRATION_ENABLED", True):
+            return bool(_has_valid_invitation(request))
+        return super().is_open_for_signup(request, sociallogin)
 
     def populate_user(self, request, sociallogin, data):
         """Set user.name from Google profile (custom User model has 'name', not first/last)."""

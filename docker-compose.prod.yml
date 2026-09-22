@@ -1,9 +1,11 @@
 services:
   migrate:
+    image: ${BRIGHTBEAN_IMAGE:-ghcr.io/krishramani111/brightbean-studio:latest}
     build: .
     command: python manage.py migrate --noinput
     env_file:
-      - .env
+      - path: .env
+        required: false
     environment:
       - DJANGO_SETTINGS_MODULE=config.settings.production
       - DATABASE_URL=postgres://postgres:postgres@postgres:5432/brightbean
