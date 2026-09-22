@@ -5,6 +5,7 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+  workflow_dispatch:
 
 # Principle of least privilege: default to read-only for every job.
 # Individual jobs can opt into more permissions if needed.
