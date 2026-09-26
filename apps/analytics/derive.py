@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
-from typing import TypeVar
 
 from .metrics import ENGAGEMENT_DENOMINATORS, ENGAGEMENT_PARTS, METRICS
 
@@ -50,10 +49,7 @@ def calculate_engagement_rate(engagements: float, views: float | None = None, re
     return round((float(engagements) / denominator) * 100, 2)
 
 
-_T = TypeVar("_T")
-
-
-def _split(values: list[_T], days: int) -> tuple[list[_T], list[_T]]:
+def _split[T](values: list[T], days: int) -> tuple[list[T], list[T]]:
     """Return (current, previous) windows of ``days`` length, latest-last."""
     if not values:
         return [], []
