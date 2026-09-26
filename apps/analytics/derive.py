@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import TypeVar
 
 from .metrics import ENGAGEMENT_DENOMINATORS, ENGAGEMENT_PARTS, METRICS
 
@@ -49,7 +50,10 @@ def calculate_engagement_rate(engagements: float, views: float | None = None, re
     return round((float(engagements) / denominator) * 100, 2)
 
 
-def _split(values: list[float], days: int) -> tuple[list[float], list[float]]:
+_T = TypeVar("_T")
+
+
+def _split(values: list[_T], days: int) -> tuple[list[_T], list[_T]]:
     """Return (current, previous) windows of ``days`` length, latest-last."""
     if not values:
         return [], []
@@ -151,6 +155,7 @@ def engagement_rate(
         (d for d in ENGAGEMENT_DENOMINATORS if d in series_by_metric and sum(series_by_metric.get(d, [])[-days:]) > 0),
         None,
     )
+    denominator: str | None = denom_key
 
     # Keep the full 2*days window through ``_split`` so the previous-period
     # numerator and denominator are both populated for the delta calc. The
@@ -171,7 +176,6 @@ def engagement_rate(
         denom_cur_window = denom_series_per_day[-days:]
         # Right-align with the parts window; a shorter series has no early days.
         denom_cur_window = [0.0] * (len(parts_cur_window) - len(denom_cur_window)) + denom_cur_window
-        denominator = denom_key
     else:
         denom_cur_total = float(fallback_followers)
         denom_prev_total = float(fallback_followers)

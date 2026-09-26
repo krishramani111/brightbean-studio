@@ -137,7 +137,7 @@ def _post_summed_series_for_metric(
     metric_key: str,
     start: dt_date,
     end: dt_date,
-) -> tuple[dict[dt_date, float], Any]:
+) -> tuple[dict[dt_date, float], Any, set[dt_date]]:
     """Per-day deltas of cumulative post snapshots, summed across all posts.
 
     ``PostInsightsSnapshot.value`` stores the cumulative-lifetime count for
@@ -400,7 +400,7 @@ def engagement_card(
         fallback_followers=account.follower_count,
         present_by_metric=bundle["present_map"],
     )
-    parts = [
+    parts: list[dict[str, Any]] = [
         {"metric": m, "label": _label(m), "derived": _derive_metric(bundle, m, days)}
         for m in PLATFORM_METRICS.get(account.platform, [])
         if m in ENGAGEMENT_PARTS
@@ -564,7 +564,7 @@ def follower_growth_metric(
             (float(value) for day, value in reversed(rows) if day < current_start),
             None,
         )
-        daily_series: list[float] = []
+        daily_series: list[float | None] = []
         for i in range(days):
             day = current_start + timedelta(days=i)
             value = by_day.get(day)
