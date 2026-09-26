@@ -36,8 +36,10 @@ from apps.inbox.services import (
     send_reply_now,
     update_reply_draft,
 )
-from apps.mcp.protocol import INVALID_PARAMS, JsonRpcError
+from apps.mcp.protocol import INTERNAL_ERROR, INVALID_PARAMS, JsonRpcError
 from apps.mcp.tools import Tool, register_tool
+from apps.settings_manager.make_api import MakeApiClient, MakeApiError
+from apps.settings_manager.models import MakeConnection
 from apps.social_accounts.models import SocialAccount
 
 # ---------------------------------------------------------------------------
@@ -103,6 +105,155 @@ def _resolve_media_folder(workspace, args: dict):
         )
     except MediaFolder.DoesNotExist as exc:
         raise JsonRpcError(INVALID_PARAMS, "folder_id not found in this organization") from exc
+
+
+def _make_connection(context: dict[str, Any]) -> tuple[MakeConnection, MakeApiClient]:
+    connection = MakeConnection.objects.filter(workspace=context["workspace"]).first()
+    if connection is None:
+        raise JsonRpcError(INVALID_PARAMS, "Connect Make.com in Workspace Settings before using these tools.")
+    if not connection.team_id:
+        raise JsonRpcError(INVALID_PARAMS, "Select a Make team in Workspace Settings before using these tools.")
+    try:
+        client = MakeApiClient(connection.region, connection.api_token)
+    except MakeApiError as exc:
+        raise JsonRpcError(INTERNAL_ERROR, str(exc)) from exc
+    return connection, client
+
+
+def _make_input_fields(interface: dict) -> list[dict]:
+    fields = interface.get("input") or []
+    return [field for field in fields if isinstance(field, dict)] if isinstance(fields, list) else []
+
+
+def _list_make_scenarios(args: dict, context: dict[str, Any]) -> dict:
+    _require_perm(context, "publish_directly")
+    connection, client = _make_connection(context)
+    allowed_ids = {int(value) for value in connection.allowed_scenario_ids if str(value).isdigit()}
+    if not allowed_ids:
+        return _wrap_text({"scenarios": [], "message": "Enable scenarios in Workspace Settings → Make.com."})
+    team_id = connection.team_id
+    if team_id is None:
+        raise JsonRpcError(INVALID_PARAMS, "Select a Make team in Workspace Settings before using these tools.")
+
+    try:
+        scenarios = client.list_scenarios(team_id)
+        result = []
+        for scenario in scenarios:
+            raw_id = scenario.get("id")
+            if raw_id is None:
+                continue
+            try:
+                scenario_id = int(raw_id)
+            except (TypeError, ValueError):
+                continue
+            if scenario_id not in allowed_ids:
+                continue
+            interface = client.get_scenario_interface(scenario_id)
+            result.append(
+                {
+                    "scenario_id": scenario_id,
+                    "name": scenario.get("name", ""),
+                    "active": bool(scenario.get("isActive", False)),
+                    "scheduling": scenario.get("scheduling"),
+                    "inputs": _make_input_fields(interface),
+                }
+            )
+    except MakeApiError as exc:
+        raise JsonRpcError(INTERNAL_ERROR, str(exc)) from exc
+
+    return _wrap_text({"scenarios": result})
+
+
+register_tool(
+    Tool(
+        name="list_make_scenarios",
+        description=(
+            "List the Make.com scenarios a workspace admin explicitly enabled for MCP. "
+            "Returns each scenario's declared inputs. Requires the publish_directly permission."
+        ),
+        input_schema={"type": "object", "properties": {}, "additionalProperties": False},
+        handler=_list_make_scenarios,
+    )
+)
+
+
+def _run_make_scenario(args: dict, context: dict[str, Any]) -> dict:
+    _require_perm(context, "publish_directly")
+    connection, client = _make_connection(context)
+    raw_scenario_id = args.get("scenario_id")
+    if isinstance(raw_scenario_id, bool) or not isinstance(raw_scenario_id, int) or raw_scenario_id < 1:
+        raise JsonRpcError(INVALID_PARAMS, "scenario_id must be a positive integer")
+
+    allowed_ids = {int(value) for value in connection.allowed_scenario_ids if str(value).isdigit()}
+    if raw_scenario_id not in allowed_ids:
+        raise JsonRpcError(INVALID_PARAMS, "scenario_id is not enabled for MCP in Workspace Settings → Make.com")
+
+    data = args.get("data") or {}
+    if not isinstance(data, dict):
+        raise JsonRpcError(INVALID_PARAMS, "data must be an object matching the scenario's declared inputs")
+
+    try:
+        interface = client.get_scenario_interface(raw_scenario_id)
+        fields = _make_input_fields(interface)
+        if fields:
+            field_names = {field.get("name") for field in fields if isinstance(field.get("name"), str)}
+            required_names = {
+                field["name"] for field in fields if field.get("required") and isinstance(field.get("name"), str)
+            }
+            missing = sorted(required_names - data.keys())
+            unknown = sorted(data.keys() - field_names)
+            if missing:
+                raise JsonRpcError(INVALID_PARAMS, f"Missing required Make scenario inputs: {', '.join(missing)}")
+            if unknown:
+                raise JsonRpcError(INVALID_PARAMS, f"Unknown Make scenario inputs: {', '.join(unknown)}")
+        elif data:
+            raise JsonRpcError(
+                INVALID_PARAMS, "This Make scenario has no declared inputs; configure inputs in Make first"
+            )
+    except MakeApiError as exc:
+        raise JsonRpcError(INTERNAL_ERROR, str(exc)) from exc
+
+    try:
+        result = client.run_scenario(
+            raw_scenario_id,
+            data,
+            wait=bool(args.get("wait_for_completion", False)),
+        )
+    except MakeApiError as exc:
+        if exc.timed_out or exc.status_code is None or exc.status_code >= 500:
+            return _wrap_text(
+                {
+                    "status": "unknown",
+                    "retry_safe": False,
+                    "message": "Make did not return within its run window. The scenario may still be running; check Make history before retrying.",
+                }
+            )
+        raise JsonRpcError(INTERNAL_ERROR, str(exc)) from exc
+
+    return _wrap_text({"scenario_id": raw_scenario_id, **result})
+
+
+register_tool(
+    Tool(
+        name="run_make_scenario",
+        description=(
+            "Run an enabled Make.com scenario using its declared JSON inputs. Configure Pinterest and other destination connections in Make. "
+            "By default this returns an execution ID immediately; wait_for_completion waits up to Make's run limit. "
+            "A wait timeout can leave the scenario running, so check Make history before retrying. Requires publish_directly."
+        ),
+        input_schema={
+            "type": "object",
+            "properties": {
+                "scenario_id": {"type": "integer", "minimum": 1},
+                "data": {"type": "object", "default": {}},
+                "wait_for_completion": {"type": "boolean", "default": False},
+            },
+            "required": ["scenario_id"],
+            "additionalProperties": False,
+        },
+        handler=_run_make_scenario,
+    )
+)
 
 
 def _parse_media_tags(args: dict) -> list:
